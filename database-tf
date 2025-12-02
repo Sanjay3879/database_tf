@@ -1,0 +1,70 @@
+---
+- name: Configure RDS MySQL Database
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    db_name: Mini_Project
+    db_table: testdata
+    users:
+      - { name: "sanjay", contact: "1234567890", address: "Dublin" }
+      - { name: "ajay", contact: "9876543210", address: "London" }
+      - { name: "harsha", contact: "5555555555", address: "Paris" }
+
+  tasks:
+
+    - name: Install MySQL client if not present
+      ansible.builtin.package:
+        name: mysql
+        state: present
+
+    - name: Ensure Python MySQL module is installed
+      ansible.builtin.pip:
+        name: PyMySQL
+        state: present
+
+    - name: Create Database
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: present
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: "{{ rds_endpoint }}"
+
+    - name: Create Table
+      community.mysql.mysql_query:
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: "{{ rds_endpoint }}"
+        query: |
+          CREATE TABLE IF NOT EXISTS {{ db_name }}.{{ db_table }} (
+            Name VARCHAR(50),
+            Contact VARCHAR(20),
+            Address VARCHAR(100)
+          );
+
+    - name: Insert Sample Data
+      community.mysql.mysql_query:
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: "{{ rds_endpoint }}"
+        query: |
+          INSERT INTO {{ db_name }}.{{ db_table }} (Name, Contact, Address)
+          VALUES
+          {% for user in users %}
+            ('{{ user.name }}','{{ user.contact }}','{{ user.address }}'){% if not loop.last %},{% endif %}
+          {% endfor %};
+
+    - name: Verify inserted data
+      community.mysql.mysql_query:
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_password }}"
+        login_host: "{{ rds_endpoint }}"
+        query: "SELECT * FROM {{ db_name }}.{{ db_table }};"
+      register: query_result
+
+    - name: Show data from table
+      ansible.builtin.debug:
+        var: query_result.query_result
+
